@@ -4,6 +4,8 @@ import pandas as pd
 
 
 VALIDATED_DIR = Path("data/validated")
+PROCESSED_DIR = Path("data/processed")
+
 DB_PATH = Path("db/nifty100.db")
 SCHEMA_PATH = Path("db/schema.sql")
 AUDIT_PATH = Path("output/load_audit.csv")
@@ -13,6 +15,15 @@ def read_csv(name):
     return pd.read_csv(
         VALIDATED_DIR / f"{name}.csv"
     )
+
+
+def get_processed_count(name):
+    file_path = PROCESSED_DIR / f"{name}.csv"
+
+    if not file_path.exists():
+        return 0
+
+    return len(pd.read_csv(file_path))
 
 
 def create_database():
@@ -80,13 +91,46 @@ def prepare_company_insights():
         columns=["id"]
     )
 
-    insights = analysis.merge(
-        prosandcons,
-        on="company_id",
-        how="outer"
+    insight_columns = [
+        "company_id",
+        "compounded_sales_growth",
+        "compounded_profit_growth",
+        "stock_price_cagr",
+        "roe",
+        "pros",
+        "cons"
+    ]
+
+    analysis["pros"] = None
+    analysis["cons"] = None
+
+    prosandcons["compounded_sales_growth"] = None
+    prosandcons["compounded_profit_growth"] = None
+    prosandcons["stock_price_cagr"] = None
+    prosandcons["roe"] = None
+
+    insights = pd.concat(
+        [
+            analysis[insight_columns],
+            prosandcons[insight_columns]
+        ],
+        ignore_index=True
     )
 
     return insights
+
+
+def get_source_rows(table_name):
+    if table_name == "company_insights":
+        return (
+            get_processed_count("analysis")
+            + get_processed_count("prosandcons")
+        )
+
+    if table_name == "companies":
+        return get_processed_count("companies")
+
+    return get_processed_count(table_name)
 
 
 def load_table(
@@ -94,7 +138,11 @@ def load_table(
     table_name,
     dataframe
 ):
-    input_rows = len(dataframe)
+    source_rows = get_source_rows(
+        table_name
+    )
+
+    validated_rows = len(dataframe)
 
     dataframe.to_sql(
         table_name,
@@ -107,21 +155,40 @@ def load_table(
         f"SELECT COUNT(*) FROM {table_name}"
     ).fetchone()[0]
 
+    rejected_rows = max(
+        source_rows - validated_rows,
+        0
+    )
+
+    critical_rejections = max(
+        validated_rows - loaded_rows,
+        0
+    )
+
+    status = (
+        "SUCCESS"
+        if loaded_rows == validated_rows
+        and critical_rejections == 0
+        else "FAILED"
+    )
+
     print(
         f"{table_name}: "
-        f"{input_rows} input | "
-        f"{loaded_rows} loaded"
+        f"{source_rows} source | "
+        f"{validated_rows} validated | "
+        f"{loaded_rows} loaded | "
+        f"{rejected_rows} DQ rejected | "
+        f"{critical_rejections} critical load rejections"
     )
 
     return {
         "table": table_name,
-        "input_rows": input_rows,
+        "source_rows": source_rows,
+        "validated_rows": validated_rows,
         "loaded_rows": loaded_rows,
-        "status": (
-            "SUCCESS"
-            if input_rows == loaded_rows
-            else "MISMATCH"
-        )
+        "rejected_rows": rejected_rows,
+        "critical_rejections": critical_rejections,
+        "status": status
     }
 
 
@@ -173,7 +240,9 @@ def main():
                 dataframe
             )
 
-            audit_records.append(audit)
+            audit_records.append(
+                audit
+            )
 
         connection.commit()
 
@@ -200,6 +269,15 @@ def main():
         audit_df.to_csv(
             AUDIT_PATH,
             index=False
+        )
+
+        total_critical = audit_df[
+            "critical_rejections"
+        ].sum()
+
+        print(
+            "Critical load rejections:",
+            total_critical
         )
 
         print(
