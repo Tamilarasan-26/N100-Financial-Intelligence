@@ -1,0 +1,10 @@
+rule,table,severity,message
+DQ-03,analysis,CRITICAL,4 invalid foreign keys
+DQ-03,balancesheet,CRITICAL,85 invalid foreign keys
+DQ-03,cashflow,CRITICAL,89 invalid foreign keys
+DQ-03,documents,CRITICAL,128 invalid foreign keys
+DQ-03,financial_ratios,CRITICAL,24 invalid foreign keys
+DQ-03,profitandloss,CRITICAL,99 invalid foreign keys
+DQ-03,prosandcons,CRITICAL,2 invalid foreign keys
+DQ-05,profitandloss,CRITICAL,Non-positive sales found
+DQ-12,financial_ratios,WARNING,Negative interest coverage

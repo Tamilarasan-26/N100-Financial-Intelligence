@@ -1,0 +1,7 @@
+company_id,company_name,financial_records,stock_price_records,review_status
+IRFC,Indian Railway Finance Corporation Ltd,9,60,PASS
+INDIGO,Interglobe Aviation Ltd,12,60,PASS
+BHEL,"Bharat Heavy Electricals Limited
+",12,60,PASS
+TATAMOTORS,Tata Motors Ltd,12,60,PASS
+POWERGRID,Power Grid Corporation of India Ltd,24,60,PASS
