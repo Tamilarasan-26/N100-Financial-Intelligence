@@ -1,5 +1,6 @@
 PRAGMA foreign_keys = ON;
 
+
 DROP TABLE IF EXISTS stock_prices;
 DROP TABLE IF EXISTS profitandloss;
 DROP TABLE IF EXISTS peer_groups;
@@ -10,6 +11,7 @@ DROP TABLE IF EXISTS cashflow;
 DROP TABLE IF EXISTS balancesheet;
 DROP TABLE IF EXISTS company_insights;
 DROP TABLE IF EXISTS companies;
+
 
 CREATE TABLE companies (
     id TEXT PRIMARY KEY,
@@ -30,6 +32,7 @@ CREATE TABLE companies (
     market_cap_category TEXT
 );
 
+
 CREATE TABLE company_insights (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id TEXT NOT NULL,
@@ -39,9 +42,11 @@ CREATE TABLE company_insights (
     roe TEXT,
     pros TEXT,
     cons TEXT,
+
     FOREIGN KEY (company_id)
         REFERENCES companies(id)
 );
+
 
 CREATE TABLE balancesheet (
     id INTEGER PRIMARY KEY,
@@ -57,9 +62,11 @@ CREATE TABLE balancesheet (
     investments REAL,
     other_asset REAL,
     total_assets REAL,
+
     FOREIGN KEY (company_id)
         REFERENCES companies(id)
 );
+
 
 CREATE TABLE cashflow (
     id INTEGER PRIMARY KEY,
@@ -69,39 +76,126 @@ CREATE TABLE cashflow (
     investing_activity REAL,
     financing_activity REAL,
     net_cash_flow REAL,
+
     FOREIGN KEY (company_id)
         REFERENCES companies(id)
 );
+
 
 CREATE TABLE documents (
     id INTEGER PRIMARY KEY,
     company_id TEXT NOT NULL,
     year INTEGER,
     annual_report TEXT,
+
     FOREIGN KEY (company_id)
         REFERENCES companies(id)
 );
 
+
 CREATE TABLE financial_ratios (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
     company_id TEXT NOT NULL,
+
     year INTEGER,
+
+    period_type TEXT NOT NULL DEFAULT 'ANNUAL',
+
+    period_months INTEGER,
+
     net_profit_margin_pct REAL,
     operating_profit_margin_pct REAL,
     return_on_equity_pct REAL,
+    return_on_capital_employed_pct REAL,
+    return_on_assets_pct REAL,
+
     debt_to_equity REAL,
+    high_leverage_flag INTEGER,
+
     interest_coverage REAL,
+    icr_label TEXT,
+    low_interest_coverage_flag INTEGER,
+
+    net_debt_cr REAL,
     asset_turnover REAL,
+
+    revenue_cagr_3y_pct REAL,
+    revenue_cagr_3y_flag TEXT,
+
+    revenue_cagr_5y_pct REAL,
+    revenue_cagr_5y_flag TEXT,
+
+    revenue_cagr_10y_pct REAL,
+    revenue_cagr_10y_flag TEXT,
+
+    pat_cagr_3y_pct REAL,
+    pat_cagr_3y_flag TEXT,
+
+    pat_cagr_5y_pct REAL,
+    pat_cagr_5y_flag TEXT,
+
+    pat_cagr_10y_pct REAL,
+    pat_cagr_10y_flag TEXT,
+
+    eps_cagr_3y_pct REAL,
+    eps_cagr_3y_flag TEXT,
+
+    eps_cagr_5y_pct REAL,
+    eps_cagr_5y_flag TEXT,
+
+    eps_cagr_10y_pct REAL,
+    eps_cagr_10y_flag TEXT,
+
     free_cash_flow_cr REAL,
+
+    cfo_quality_score REAL,
+    cfo_quality_label TEXT,
+
     capex_cr REAL,
+    capex_intensity_pct REAL,
+    fcf_conversion_rate_pct REAL,
+
     earnings_per_share REAL,
     book_value_per_share REAL,
     dividend_payout_ratio_pct REAL,
+
     total_debt_cr REAL,
     cash_from_operations_cr REAL,
+
     FOREIGN KEY (company_id)
-        REFERENCES companies(id)
+        REFERENCES companies(id),
+
+    CHECK (
+        period_type IN (
+            'ANNUAL',
+            'TTM',
+            'PARTIAL'
+        )
+    ),
+
+    CHECK (
+        (
+            period_type = 'ANNUAL'
+            AND year IS NOT NULL
+            AND period_months = 12
+        )
+        OR
+        (
+            period_type = 'TTM'
+            AND year IS NULL
+            AND period_months = 12
+        )
+        OR
+        (
+            period_type = 'PARTIAL'
+            AND year IS NOT NULL
+            AND period_months IS NOT NULL
+            AND period_months > 0
+        )
+    )
 );
+
 
 CREATE TABLE market_cap (
     id INTEGER PRIMARY KEY,
@@ -113,23 +207,34 @@ CREATE TABLE market_cap (
     pb_ratio REAL,
     ev_ebitda REAL,
     dividend_yield_pct REAL,
+
     FOREIGN KEY (company_id)
         REFERENCES companies(id)
 );
+
 
 CREATE TABLE peer_groups (
     id INTEGER PRIMARY KEY,
     peer_group_name TEXT,
     company_id TEXT NOT NULL,
     is_benchmark INTEGER,
+
     FOREIGN KEY (company_id)
         REFERENCES companies(id)
 );
 
+
 CREATE TABLE profitandloss (
     id INTEGER PRIMARY KEY,
+
     company_id TEXT NOT NULL,
+
     year INTEGER,
+
+    period_type TEXT NOT NULL DEFAULT 'ANNUAL',
+
+    period_months INTEGER,
+
     sales REAL,
     expenses REAL,
     operating_profit REAL,
@@ -142,9 +247,40 @@ CREATE TABLE profitandloss (
     net_profit REAL,
     eps REAL,
     dividend_payout REAL,
+
     FOREIGN KEY (company_id)
-        REFERENCES companies(id)
+        REFERENCES companies(id),
+
+    CHECK (
+        period_type IN (
+            'ANNUAL',
+            'TTM',
+            'PARTIAL'
+        )
+    ),
+
+    CHECK (
+        (
+            period_type = 'ANNUAL'
+            AND year IS NOT NULL
+            AND period_months = 12
+        )
+        OR
+        (
+            period_type = 'TTM'
+            AND year IS NULL
+            AND period_months = 12
+        )
+        OR
+        (
+            period_type = 'PARTIAL'
+            AND year IS NOT NULL
+            AND period_months IS NOT NULL
+            AND period_months > 0
+        )
+    )
 );
+
 
 CREATE TABLE stock_prices (
     id INTEGER PRIMARY KEY,
@@ -156,30 +292,71 @@ CREATE TABLE stock_prices (
     close_price REAL,
     volume INTEGER,
     adjusted_close REAL,
+
     FOREIGN KEY (company_id)
         REFERENCES companies(id)
 );
 
+
 CREATE INDEX idx_balance_company
 ON balancesheet(company_id);
+
 
 CREATE INDEX idx_cashflow_company
 ON cashflow(company_id);
 
+
 CREATE INDEX idx_documents_company
 ON documents(company_id);
+
 
 CREATE INDEX idx_ratios_company
 ON financial_ratios(company_id);
 
+
+CREATE INDEX idx_ratios_company_year
+ON financial_ratios(
+    company_id,
+    year
+);
+
+
+CREATE INDEX idx_ratios_period
+ON financial_ratios(
+    period_type,
+    period_months
+);
+
+
+CREATE INDEX idx_ratios_company_period
+ON financial_ratios(
+    company_id,
+    period_type,
+    year,
+    period_months
+);
+
+
 CREATE INDEX idx_market_company
 ON market_cap(company_id);
+
 
 CREATE INDEX idx_pnl_company
 ON profitandloss(company_id);
 
+
+CREATE INDEX idx_pnl_period
+ON profitandloss(
+    company_id,
+    year,
+    period_type,
+    period_months
+);
+
+
 CREATE INDEX idx_stock_company
 ON stock_prices(company_id);
 
+
 CREATE INDEX idx_stock_date
-ON stock_prices(date);
+ON stock_prices(date); 

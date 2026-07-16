@@ -3,13 +3,20 @@ from pathlib import Path
 
 import pandas as pd
 
+
 sys.path.insert(
     0,
-    str(Path(__file__).resolve().parents[2] / "src" / "etl")
+    str(
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "etl"
+    )
 )
+
 
 from normaliser import (
     normalize_year,
+    normalize_period,
     normalize_ticker,
     normalize_columns,
 )
@@ -76,7 +83,9 @@ def test_ticker_internal_spaces():
 
 
 def test_column_lowercase():
-    df = pd.DataFrame(columns=["Company ID"])
+    df = pd.DataFrame(
+        columns=["Company ID"]
+    )
 
     result = normalize_columns(df)
 
@@ -84,7 +93,9 @@ def test_column_lowercase():
 
 
 def test_column_ampersand():
-    df = pd.DataFrame(columns=["Profit & Loss"])
+    df = pd.DataFrame(
+        columns=["Profit & Loss"]
+    )
 
     result = normalize_columns(df)
 
@@ -92,7 +103,9 @@ def test_column_ampersand():
 
 
 def test_column_percentage():
-    df = pd.DataFrame(columns=["ROE %"])
+    df = pd.DataFrame(
+        columns=["ROE %"]
+    )
 
     result = normalize_columns(df)
 
@@ -115,3 +128,53 @@ def test_multiple_columns():
         "net_profit",
         "roe_pct"
     ]
+
+
+def test_annual_period():
+    result = normalize_period(
+        "Mar 2024"
+    )
+
+    assert result["year"] == 2024
+    assert result["period_type"] == "ANNUAL"
+    assert result["period_months"] == 12
+
+
+def test_ttm_period():
+    result = normalize_period(
+        "TTM"
+    )
+
+    assert result["year"] is None
+    assert result["period_type"] == "TTM"
+    assert result["period_months"] == 12
+
+
+def test_partial_9m_period():
+    result = normalize_period(
+        "Mar 2016 9m"
+    )
+
+    assert result["year"] == 2016
+    assert result["period_type"] == "PARTIAL"
+    assert result["period_months"] == 9
+
+
+def test_partial_15m_period():
+    result = normalize_period(
+        "Mar 2023 15"
+    )
+
+    assert result["year"] == 2023
+    assert result["period_type"] == "PARTIAL"
+    assert result["period_months"] == 15
+
+
+def test_missing_period():
+    result = normalize_period(
+        None
+    )
+
+    assert result["year"] is None
+    assert result["period_type"] is None
+    assert result["period_months"] is None
