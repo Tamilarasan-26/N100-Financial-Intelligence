@@ -447,6 +447,10 @@ def create_ratio_records(
         ): row
         for _, row in cashflow.iterrows()
     }
+    companies_lookup = {
+    row["id"]: row
+    for _, row in companies.iterrows()
+    }
 
     for (
         company_id,
@@ -464,6 +468,20 @@ def create_ratio_records(
         growth = calculate_growth_cagrs(
             growth_records
         )
+        # =====================================================
+        # Latest Annual Year
+        # =====================================================
+
+        annual_rows = company_pnl[
+            company_pnl["period_type"] == "ANNUAL"
+        ]
+
+        if not annual_rows.empty:
+            latest_annual_year = int(
+                annual_rows["year"].max()
+            )
+        else:
+            latest_annual_year = None
 
         for _, pnl_row in company_pnl.iterrows():
 
@@ -657,6 +675,71 @@ def create_ratio_records(
                         borrowings
                     )
                 )
+
+            # =====================================================
+            # Source ROE / ROCE
+            # =====================================================
+
+            company_row = companies_lookup.get(
+                company_id
+            )
+
+            source_roe = safe_value(
+                company_row,
+                "roe_percentage"
+            )
+
+            source_roce = safe_value(
+                company_row,
+                "roce_percentage"
+            )
+            
+            # =====================================================
+            # ROE Cross Check
+            # =====================================================
+
+            if (
+                period_type == "ANNUAL"
+                and year == latest_annual_year
+                and roe is not None
+                and source_roe is not None
+            ):
+                difference = abs(
+                    roe - source_roe
+                )
+
+                if difference > 5:
+                    logging.warning(
+                        f"[DATA_SOURCE] "
+                        f"{company_id} | "
+                        f"ROE mismatch | "
+                        f"Computed={roe:.2f} | "
+                        f"Source={source_roe:.2f} | "
+                        f"Difference={difference:.2f}"
+                    )
+            # =====================================================
+            # ROCE Cross Check
+            # =====================================================
+
+            if (
+                period_type == "ANNUAL"
+                and year == latest_annual_year
+                and roce is not None
+                and source_roce is not None
+            ):
+                difference = abs(
+                    roce - source_roce
+                )
+
+                if difference > 5:
+                    logging.warning(
+                        f"[DATA_SOURCE] "
+                        f"{company_id} | "
+                        f"ROCE mismatch | "
+                        f"Computed={roce:.2f} | "
+                        f"Source={source_roce:.2f} | "
+                        f"Difference={difference:.2f}"
+                    )
 
             roa = None
 
