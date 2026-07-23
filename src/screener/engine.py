@@ -14,6 +14,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATABASE_PATH = PROJECT_ROOT / "db" / "nifty100.db"
 CONFIG_PATH = PROJECT_ROOT / "config" / "screener_config.yaml"
 
+OUTPUT_FOLDER = PROJECT_ROOT / "output"
+
+OUTPUT_FOLDER.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+OUTPUT_FILE = OUTPUT_FOLDER / "screener_output.xlsx"
+
 
 # ==========================
 # Load Financial Ratios
@@ -603,11 +612,98 @@ def main():
     profit_loss,
     companies
     )
+    
+    for col in [
+        "composite_quality_score",
+        "composite_quality_score_x",
+        "composite_quality_score_y"
+    ]:
+        if col in merged_df.columns:
+            merged_df = merged_df.drop(columns=col)
+    
     print("\nMerged Rows :", len(merged_df))
 
     print("\nMerged Columns :")
     print(merged_df.columns.tolist())
 
+    # Calculate composite score for ALL companies
+    merged_df = add_composite_score(merged_df)
+    
+    writer = pd.ExcelWriter(
+        OUTPUT_FILE,
+        engine="openpyxl"
+    )
+    
+    presets = {
+        "Quality Compounder": "quality_compounder",
+        "Value Pick": "value_pick",
+        "Growth Accelerator": "growth_accelerator",
+        "Dividend Champion": "dividend_champion",
+        "Debt Free Bluechip": "debt_free_bluechip",
+        "Turnaround Watch": "turnaround_watch"
+    }
+
+    for sheet_name, preset_name in presets.items():
+
+        preset_df = apply_preset(
+            merged_df,
+            preset_name
+        )
+
+        preset_df = keep_latest_year(preset_df)
+
+        preset_df = preset_df.sort_values(
+            by="composite_quality_score",
+            ascending=False
+        )
+
+        preset_df.to_excel(
+            writer,
+            sheet_name=sheet_name,
+            index=False
+        )
+    writer.close()
+
+    print(f"\nScreener workbook saved to:\n{OUTPUT_FILE}")
+
+    # Save ALL companies with composite score to SQLite
+    con = sqlite3.connect(DATABASE_PATH)
+
+    financial_ratios = pd.read_sql(
+        "SELECT * FROM financial_ratios",
+        con
+    )
+    
+    # Remove old score column if it already exists
+    if "composite_quality_score" in financial_ratios.columns:
+        financial_ratios = financial_ratios.drop(
+            columns=["composite_quality_score"]
+        )
+
+    financial_ratios = financial_ratios.merge(
+        merged_df[
+            [
+                "company_id",
+                "year",
+                "composite_quality_score"
+            ]
+        ],
+        on=["company_id", "year"],
+        how="left"
+    )
+
+    financial_ratios.to_sql(
+        "financial_ratios",
+        con,
+        if_exists="replace",
+        index=False
+    )
+
+    con.close()
+
+    print("\nComposite Quality Score saved to SQLite.")
+
+    # Apply screening after scoring
     if SCREEN_MODE == "custom":
 
         filtered = apply_filters(
@@ -617,16 +713,14 @@ def main():
 
     elif SCREEN_MODE == "preset":
 
-       filtered = apply_preset(
-        merged_df,
-        "turnaround_watch"
-    )
+        filtered = apply_preset(
+            merged_df,
+            "turnaround_watch"
+        )
 
-    filtered = add_composite_score(filtered)
+
     filtered = keep_latest_year(filtered)
     
-    
-    print("Unique Companies:", filtered["company_id"].nunique())
     print("Latest Years:", sorted(filtered["year"].unique(), reverse=True))
     
     print("\n" + "=" * 60)
@@ -653,7 +747,7 @@ def main():
                 "asset_turnover"
             ]
         ].head(10)
-    )
+     )
 
 
 if __name__ == "__main__":
