@@ -5,10 +5,13 @@ __pycache__/
 .env
 .vscode/
 
+# Ignore databases
 *.db
-!db/nifty100.db
 
+# Ignore generated output files
 output/*
+
+# Keep important validation/audit files
 !output/load_audit.csv
 !output/validation_failures.csv
 !output/manual_review.csv
