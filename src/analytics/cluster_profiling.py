@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 import sqlite3
 import numpy as np
 import pandas as pd
@@ -46,22 +46,23 @@ print("=" * 60)
 print("CLUSTER PROFILING")
 print("=" * 60)
 
-print(f"Cluster companies : {len(clusters)}")
-print(f"Unique companies  : {clusters['company_id'].nunique()}")
+print("Cluster companies :", len(clusters))
+print("Unique companies  :", clusters["company_id"].nunique())
 
 
 # ============================================================
 # VALIDATE CLUSTER FILE
 # ============================================================
 
-required_columns = [
+required_cluster_columns = [
     "company_id",
     "cluster_id",
     "cluster_name",
 ]
 
 missing_columns = [
-    col for col in required_columns
+    col
+    for col in required_cluster_columns
     if col not in clusters.columns
 ]
 
@@ -97,7 +98,7 @@ ratios = pd.read_sql(
     WHERE period_type = 'ANNUAL'
     ORDER BY company_id, year
     """,
-    con
+    con,
 )
 
 con.close()
@@ -115,10 +116,12 @@ ratios["company_id"] = (
 
 ratios["year"] = pd.to_numeric(
     ratios["year"],
-    errors="coerce"
+    errors="coerce",
 )
 
-ratios = ratios.dropna(subset=["year"])
+ratios = ratios.dropna(
+    subset=["year"]
+)
 
 ratios["year"] = ratios["year"].astype(int)
 
@@ -127,8 +130,10 @@ ratios["year"] = ratios["year"].astype(int)
 # CALCULATE 5-YEAR FCF CAGR
 #
 # IMPORTANT:
-# fcf_cagr_5yr is NOT a database column.
-# It is calculated from free_cash_flow_cr.
+# fcf_cagr_5yr DOES NOT EXIST IN THE DATABASE.
+#
+# It is calculated from:
+# free_cash_flow_cr
 # ============================================================
 
 def calculate_fcf_cagr(group):
@@ -146,16 +151,25 @@ def calculate_fcf_cagr(group):
         group["year"] == start_year
     ]
 
-    if latest_rows.empty or start_rows.empty:
+    if latest_rows.empty:
+        return np.nan
+
+    if start_rows.empty:
         return np.nan
 
     latest_fcf = latest_rows.iloc[-1]["free_cash_flow_cr"]
     start_fcf = start_rows.iloc[-1]["free_cash_flow_cr"]
 
-    if pd.isna(latest_fcf) or pd.isna(start_fcf):
+    if pd.isna(latest_fcf):
         return np.nan
 
-    if start_fcf <= 0 or latest_fcf <= 0:
+    if pd.isna(start_fcf):
+        return np.nan
+
+    if start_fcf <= 0:
+        return np.nan
+
+    if latest_fcf <= 0:
         return np.nan
 
     return (
@@ -166,19 +180,29 @@ def calculate_fcf_cagr(group):
 fcf_cagr = (
     ratios
     .groupby("company_id")
-    .apply(calculate_fcf_cagr)
-    .reset_index(name="fcf_cagr_5yr")
+    .apply(
+        calculate_fcf_cagr,
+        include_groups=False,
+    )
+    .reset_index(
+        name="fcf_cagr_5yr"
+    )
 )
 
 
 # ============================================================
-# SELECT LATEST YEAR FOR EACH COMPANY
+# SELECT LATEST YEAR
 # ============================================================
 
 latest = (
     ratios
-    .sort_values(["company_id", "year"])
-    .groupby("company_id")
+    .sort_values(
+        ["company_id", "year"]
+    )
+    .groupby(
+        "company_id",
+        as_index=False,
+    )
     .tail(1)
     .copy()
 )
@@ -200,33 +224,32 @@ latest = latest[
 # ADD FCF CAGR
 # ============================================================
 
-fcf_lookup = (
-    fcf_cagr
-    .set_index("company_id")["fcf_cagr_5yr"]
-)
-
-latest["fcf_cagr_5yr"] = (
-    latest["company_id"].map(fcf_lookup)
+latest = latest.merge(
+    fcf_cagr,
+    on="company_id",
+    how="left",
+    validate="one_to_one",
 )
 
 
 # ============================================================
-# VERIFY FCF COLUMN
+# VERIFY FCF CAGR
 # ============================================================
 
-print("\nFinancial columns after FCF calculation:")
+print()
+print("Financial columns after FCF calculation:")
 print(latest.columns.tolist())
 
+print()
 print(
-    "\nFCF CAGR calculated for:",
+    "FCF CAGR calculated for:",
     latest["fcf_cagr_5yr"].notna().sum(),
-    "companies"
+    "companies",
 )
-
 
 if "fcf_cagr_5yr" not in latest.columns:
     raise ValueError(
-        "ERROR: fcf_cagr_5yr was not created."
+        "FCF CAGR column was not created."
     )
 
 
@@ -238,7 +261,7 @@ df = clusters.merge(
     latest,
     on="company_id",
     how="left",
-    validate="one_to_one"
+    validate="one_to_one",
 )
 
 
@@ -246,9 +269,13 @@ df = clusters.merge(
 # VALIDATION
 # ============================================================
 
-print("\nFinancial rows     :", len(latest))
+print()
+print("Financial rows     :", len(latest))
 print("Merged rows        :", len(df))
-print("Unique companies   :", df["company_id"].nunique())
+print(
+    "Unique companies   :",
+    df["company_id"].nunique(),
+)
 
 
 if len(latest) != 92:
@@ -277,22 +304,25 @@ missing_features = (
     .sum()
 )
 
-print("\nMissing values:")
-print(missing_features.to_string())
+print()
+print("Missing values:")
+print(
+    missing_features.to_string()
+)
 
 
 # ============================================================
-# CHECK CLUSTERS
+# CHECK CLUSTER ASSIGNMENTS
 # ============================================================
 
 if df["cluster_id"].isna().any():
     raise ValueError(
-        "Some companies have missing cluster IDs."
+        "Missing cluster IDs detected."
     )
 
 if df["cluster_name"].isna().any():
     raise ValueError(
-        "Some companies have missing cluster names."
+        "Missing cluster names detected."
     )
 
 
@@ -310,7 +340,9 @@ for cluster_id in sorted(
         df["cluster_id"] == cluster_id
     ]
 
-    cluster_name = subset["cluster_name"].iloc[0]
+    cluster_name = subset[
+        "cluster_name"
+    ].iloc[0]
 
     row = {
         "cluster_id": int(cluster_id),
@@ -320,22 +352,24 @@ for cluster_id in sorted(
 
     for feature in FEATURES:
 
-        row[f"{feature}_mean"] = (
-            subset[feature].mean()
-        )
+        row[
+            f"{feature}_mean"
+        ] = subset[feature].mean()
 
-        row[f"{feature}_median"] = (
-            subset[feature].median()
-        )
+        row[
+            f"{feature}_median"
+        ] = subset[feature].median()
 
     profile_rows.append(row)
 
 
 # ============================================================
-# CREATE DATAFRAME
+# CREATE PROFILE DATAFRAME
 # ============================================================
 
-profile = pd.DataFrame(profile_rows)
+profile = pd.DataFrame(
+    profile_rows
+)
 
 
 # ============================================================
@@ -344,7 +378,9 @@ profile = pd.DataFrame(profile_rows)
 
 numeric_columns = (
     profile
-    .select_dtypes(include="number")
+    .select_dtypes(
+        include="number"
+    )
     .columns
 )
 
@@ -364,17 +400,20 @@ output_file = (
 
 profile.to_csv(
     output_file,
-    index=False
+    index=False,
 )
 
 
 # ============================================================
-# DISPLAY PROFILE
+# DISPLAY CLUSTER PROFILES
 # ============================================================
 
-print("\nCluster Profiles:")
+print()
+print("Cluster Profiles:")
 print(
-    profile.to_string(index=False)
+    profile.to_string(
+        index=False
+    )
 )
 
 
@@ -382,19 +421,27 @@ print(
 # CLUSTER DISTRIBUTION
 # ============================================================
 
-print("\nCluster distribution:")
+print()
+print("Cluster distribution:")
 
 distribution = (
     df
     .groupby(
-        ["cluster_id", "cluster_name"]
+        [
+            "cluster_id",
+            "cluster_name",
+        ]
     )
     .size()
-    .reset_index(name="companies")
+    .reset_index(
+        name="companies"
+    )
 )
 
 print(
-    distribution.to_string(index=False)
+    distribution.to_string(
+        index=False
+    )
 )
 
 
@@ -402,28 +449,37 @@ print(
 # FINAL VALIDATION
 # ============================================================
 
-print("\nFinal validation:")
+print()
+print("Final validation:")
 
-print("Rows               :", len(df))
+print(
+    "Rows               :",
+    len(df),
+)
+
 print(
     "Unique companies   :",
-    df["company_id"].nunique()
+    df["company_id"].nunique(),
 )
+
 print(
     "Unique clusters    :",
-    df["cluster_id"].nunique()
+    df["cluster_id"].nunique(),
 )
+
 print(
     "Duplicate companies:",
-    df["company_id"].duplicated().sum()
+    df["company_id"].duplicated().sum(),
 )
+
 print(
     "Missing cluster IDs:",
-    df["cluster_id"].isna().sum()
+    df["cluster_id"].isna().sum(),
 )
+
 print(
     "Missing names      :",
-    df["cluster_name"].isna().sum()
+    df["cluster_name"].isna().sum(),
 )
 
 
@@ -431,7 +487,9 @@ print(
 # FINISH
 # ============================================================
 
-print("\nOutput saved:")
+print()
+print("Output saved:")
 print(output_file)
 
-print("\nDay 37 — Cluster profiling complete.")
+print()
+print("Day 37 — Cluster profiling complete.")
