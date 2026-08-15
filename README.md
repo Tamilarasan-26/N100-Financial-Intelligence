@@ -9,6 +9,7 @@ The platform combines financial statement analysis, valuation, risk scoring, cas
 # 🚀 Key Features
 
 - Multi-page Streamlit Financial Dashboard
+- FastAPI Backend
 - Company Profile Analysis
 - Financial Stock Screener
 - Peer Comparison
@@ -28,6 +29,11 @@ The platform combines financial statement analysis, valuation, risk scoring, cas
 - CSV & Excel Exports
 - Interactive Plotly Visualizations
 - SQLite Database Integration
+- REST API Integration
+- Automated API Testing
+- Data Quality Testing
+- Performance Testing
+- End-to-End Integration Testing
 
 ---
 
@@ -43,6 +49,9 @@ N100_FINANCIAL_INTELLIGENCE/
 │   ├── processed/
 │   └── db/
 │
+├── db/
+│   └── nifty100.db
+│
 ├── output/
 │   ├── cashflow_intelligence.xlsx
 │   ├── risk_scores.xlsx
@@ -57,7 +66,15 @@ N100_FINANCIAL_INTELLIGENCE/
 ├── reports/
 │   ├── charts/
 │   ├── sector/
-│   └── tearsheets/
+│   ├── tearsheets/
+│   ├── assets/
+│   └── pytest_report.html
+│
+├── scripts/
+│   ├── performance_test.py
+│   ├── profile_performance_test.py
+│   ├── profile_dashboard_performance.py
+│   └── e2e_test.py
 │
 ├── src/
 │   ├── analytics/
@@ -65,32 +82,91 @@ N100_FINANCIAL_INTELLIGENCE/
 │   │   ├── capital_allocation.py
 │   │   ├── capital_allocation_report.py
 │   │   ├── cashflow_kpis.py
+│   │   ├── clustering.py
+│   │   ├── cluster_profiling.py
+│   │   ├── correlation_analysis.py
 │   │   ├── generate_cashflow.py
+│   │   ├── outlier_detection.py
 │   │   ├── pattern_changes.py
 │   │   ├── peer.py
 │   │   ├── peer_comparison.py
 │   │   ├── populate_ratios.py
+│   │   ├── portfolio_stats.py
 │   │   ├── radar.py
 │   │   ├── ratios.py
 │   │   ├── risk_scoring.py
 │   │   └── valuation.py
 │   │
+│   ├── api/
+│   │   ├── main.py
+│   │   ├── __init__.py
+│   │   └── routers/
+│   │       ├── companies.py
+│   │       ├── documents.py
+│   │       ├── health.py
+│   │       ├── peers.py
+│   │       ├── portfolio.py
+│   │       ├── screener.py
+│   │       ├── sectors.py
+│   │       └── valuation.py
+│   │
 │   ├── dashboard/
 │   │   ├── app.py
+│   │   ├── __init__.py
 │   │   ├── pages/
 │   │   └── utils/
+│   │       ├── api.py
+│   │       ├── db.py
+│   │       └── __init__.py
+│   │
+│   ├── etl/
+│   │   ├── check_failures.py
+│   │   ├── create_validated_data.py
+│   │   ├── db_loader.py
+│   │   ├── loader.py
+│   │   ├── load_capital_allocation.py
+│   │   ├── manual_review.py
+│   │   ├── normaliser.py
+│   │   ├── quarantine.py
+│   │   ├── validator.py
+│   │   └── verify_database.py
 │   │
 │   ├── nlp/
+│   │   ├── parser.py
 │   │   └── pros_cons_generator.py
 │   │
 │   ├── reports/
-│   │   ├── tearsheet.py
-│   │   ├── sector_report.py
-│   │   ├── portfolio_summary.py
+│   │   ├── generate_charts.py
 │   │   ├── portfolio_charts.py
-│   │   └── portfolio_report.py
+│   │   ├── portfolio_report.py
+│   │   ├── portfolio_summary.py
+│   │   ├── sector_report.py
+│   │   └── tearsheet.py
 │   │
 │   └── screener/
+│       ├── engine.py
+│       └── __init__.py
+│
+├── tests/
+│   ├── api/
+│   │   ├── test_companies.py
+│   │   ├── test_health.py
+│   │   ├── test_peers.py
+│   │   ├── test_screener.py
+│   │   └── test_sectors.py
+│   │
+│   ├── dq/
+│   │   └── test_rules.py
+│   │
+│   ├── etl/
+│   │   ├── test_loader.py
+│   │   ├── test_normaliser.py
+│   │   └── test_validator.py
+│   │
+│   └── kpi/
+│       ├── test_cagr.py
+│       ├── test_leverage_efficiency.py
+│       └── test_ratios.py
 │
 ├── README.md
 └── requirements.txt
@@ -344,18 +420,115 @@ Provides:
 
 ---
 
+# ⚡ FastAPI Backend
+
+The platform provides a FastAPI REST API for serving financial intelligence data to the Streamlit dashboard.
+
+## API Base URL
+
+```text
+http://127.0.0.1:8000/api/v1
+```
+
+## Health Endpoint
+
+```text
+GET /api/v1/health
+```
+
+The health endpoint provides:
+
+- API status
+- Database row counts
+- Application uptime
+- API version
+
+Example:
+
+```json
+{
+    "status": "ok",
+    "version": "1.0.0"
+}
+```
+
+## Main API Modules
+
+The backend provides endpoints for:
+
+- Health monitoring
+- Company listing
+- Company profiles
+- Stock screening
+- Sector analysis
+- Peer groups
+- Peer comparison
+- Portfolio analysis
+- Valuation
+- Annual reports and documents
+
+---
+
+# 🔌 Dashboard API Integration
+
+The Streamlit dashboard communicates with the FastAPI backend using:
+
+```text
+src/dashboard/utils/api.py
+```
+
+The API client provides functions for:
+
+- Health checks
+- Company listing
+- Company profiles
+- Screener requests
+- Sector data
+- Companies by sector
+
+The dashboard uses Streamlit caching to reduce repeated API requests.
+
+The architecture is:
+
+```text
+┌─────────────────────────────┐
+│    Streamlit Dashboard      │
+│        Port 8501            │
+└──────────────┬──────────────┘
+               │
+               │ HTTP Requests
+               ▼
+┌─────────────────────────────┐
+│      FastAPI Backend        │
+│        Port 8000            │
+└──────────────┬──────────────┘
+               │
+               │ SQL Queries
+               ▼
+┌─────────────────────────────┐
+│      SQLite Database        │
+│       nifty100.db           │
+└─────────────────────────────┘
+```
+
+---
+
 # 🛠️ Technologies Used
 
 - Python
 - Pandas
 - NumPy
 - Streamlit
+- FastAPI
+- Uvicorn
 - Plotly
 - Matplotlib
 - Scikit-learn
 - SQLite
 - OpenPyXL
 - ReportLab
+- Pytest
+- Requests
 
 ---
 
@@ -390,10 +563,341 @@ pip install -r requirements.txt
 
 ---
 
-# ▶️ Run the Dashboard
+# ▶️ Running the Application
 
-```bash
+The platform consists of two main services:
+
+1. FastAPI backend
+2. Streamlit dashboard
+
+Both services should be running simultaneously.
+
+## Start FastAPI
+
+Open the first terminal inside the project directory.
+
+Activate the virtual environment:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Start FastAPI:
+
+```powershell
+uvicorn src.api.main:app --reload
+```
+
+FastAPI will be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+API base URL:
+
+```text
+http://127.0.0.1:8000/api/v1
+```
+
+---
+
+## Start Streamlit
+
+Open a second terminal inside the project directory.
+
+Activate the virtual environment:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Run Streamlit:
+
+```powershell
 streamlit run src/dashboard/app.py
+```
+
+The dashboard will be available at:
+
+```text
+http://localhost:8501
+```
+
+---
+
+# 🧪 Quality Assurance
+
+The project includes automated validation and testing for:
+
+- API Endpoints
+- Data Validation
+- Missing Data Handling
+- Duplicate Company Detection
+- Financial Calculation Validation
+- Cash-Flow Validation
+- CapEx Intensity Validation
+- Risk Score Validation
+- Pros & Cons Validation
+- Report Generation
+- Dashboard Integration
+- Multi-Page Navigation
+- Screener Testing
+- Valuation Testing
+- CSV Export Testing
+- Excel Export Testing
+- ETL Validation
+- KPI Validation
+
+---
+
+# 🧪 Automated Test Suite
+
+The project uses Pytest for automated testing.
+
+## API Tests
+
+The API test suite covers:
+
+- Health endpoint
+- Company endpoints
+- Screener endpoints
+- Sector endpoints
+- Peer endpoints
+
+## Data Quality Tests
+
+The data quality tests cover:
+
+- Duplicate company IDs
+- Null company IDs
+- Invalid foreign keys
+- Invalid financial values
+- Invalid stock prices
+- Negative volume
+- Invalid market capitalization
+- Invalid P/E ratios
+
+## ETL Tests
+
+The ETL test suite covers:
+
+- Data loading
+- Header validation
+- Row count validation
+- Company ID normalization
+- Year normalization
+- Column normalization
+- Period normalization
+- Validation failure detection
+
+## KPI Tests
+
+The KPI test suite covers:
+
+- CAGR calculations
+- Revenue CAGR
+- PAT CAGR
+- Debt-to-Equity
+- Interest Coverage
+- Net Debt
+- Asset Turnover
+- ROE
+- ROCE
+- ROA
+- Operating Profit Margin
+- Net Profit Margin
+- Leverage flags
+
+---
+
+# 📊 Final Test Result
+
+The complete automated test suite was executed successfully.
+
+```text
+Total tests : 152
+Passed      : 152
+Failed      : 0
+Warnings    : 2
+Result      : PASS
+```
+
+The final test execution completed successfully.
+
+A detailed HTML test report is generated at:
+
+```text
+reports/pytest_report.html
+```
+
+---
+
+# ⚡ Performance Testing
+
+Performance testing was performed for the FastAPI backend and dashboard data-loading workflows.
+
+## Screener API Performance
+
+10 concurrent Screener API requests were tested.
+
+```text
+Successful requests : 10/10
+Average response    : 0.042 seconds
+Slowest response    : 0.052 seconds
+Target              : 10 seconds
+Result              : PASS
+```
+
+## Company Profile API Performance
+
+Five company profiles were tested:
+
+```text
+TCS
+INFY
+RELIANCE
+HDFCBANK
+ICICIBANK
+```
+
+Results:
+
+```text
+Successful requests : 5/5
+Average response    : 0.016 seconds
+Slowest response    : 0.029 seconds
+Target              : 3 seconds
+Result              : PASS
+```
+
+---
+
+# 🔄 End-to-End Integration Testing
+
+The platform was tested with FastAPI and Streamlit running simultaneously.
+
+## Service Checks
+
+```text
+FastAPI      : HTTP 200
+Streamlit    : HTTP 200
+```
+
+## API Data Verification
+
+```text
+Health response structure : PASS
+API status                : ok
+Companies                 : 92
+Financial ratios          : 1163
+```
+
+## Result
+
+```text
+PASS: FastAPI and Streamlit are running simultaneously
+and API data is available.
+```
+
+---
+
+# 🗄️ Database Performance Optimization
+
+SQLite indexes were added to improve frequently used company/year queries.
+
+## Financial Ratios
+
+Index:
+
+```text
+idx_financial_ratios_company_year
+```
+
+Applied to:
+
+```text
+financial_ratios(company_id, year)
+```
+
+## Capital Allocation
+
+Index:
+
+```text
+idx_capital_allocation_company_year
+```
+
+Applied to:
+
+```text
+capital_allocation(company_id, year)
+```
+
+These indexes improve query performance for company-specific and year-specific financial analysis.
+
+---
+
+# 🩺 API Health Monitoring
+
+The API health endpoint provides information about:
+
+- API status
+- Database row counts
+- API version
+- Application uptime
+
+Current database statistics include:
+
+```text
+Companies          : 92
+Financial Ratios   : 1163
+Market Cap         : 552
+Stock Prices       : 5520
+```
+
+---
+
+# 🧪 Running Tests
+
+Run the complete test suite:
+
+```powershell
+pytest -v
+```
+
+Generate the HTML test report:
+
+```powershell
+pytest -v --html=reports/pytest_report.html
+```
+
+---
+
+# ⚡ Running Performance Tests
+
+## Screener API Performance
+
+```powershell
+python scripts/performance_test.py
+```
+
+## Company Profile Performance
+
+```powershell
+python scripts/profile_performance_test.py
+```
+
+## Dashboard Profile Performance
+
+```powershell
+python scripts/profile_dashboard_performance.py
+```
+
+## End-to-End Integration Test
+
+```powershell
+python scripts/e2e_test.py
 ```
 
 ---
@@ -428,29 +932,15 @@ reports/sector/
 reports/tearsheets/
 ```
 
+## Test Reports
+
+```text
+reports/pytest_report.html
+```
+
 ---
 
-# 🧪 Quality Assurance
-
-The project includes validation and testing for:
-
-- Data Validation
-- Missing Data Handling
-- Duplicate Company Detection
-- Financial Calculation Validation
-- Cash-Flow Validation
-- CapEx Intensity Validation
-- Risk Score Validation
-- Pros & Cons Validation
-- Report Generation
-- Dashboard Integration
-- Multi-Page Navigation
-- Screener Testing
-- Valuation Testing
-- CSV Export Testing
-- Excel Export Testing
-
-## Final Core Data Validation
+# 🧪 Final Core Data Validation
 
 ```text
 Risk rows: 92
@@ -460,7 +950,7 @@ Risk companies: 92
 Cash-flow companies: 92
 ```
 
-### Risk Distribution
+## Risk Distribution
 
 ```text
 LOW    : 52
@@ -468,7 +958,7 @@ MEDIUM : 19
 HIGH   : 21
 ```
 
-### Cash-Flow Validation
+## Cash-Flow Validation
 
 ```text
 Companies: 92
@@ -518,4 +1008,4 @@ Data Analyst | Data Science Enthusiast
 
 **N100 Financial Intelligence Platform**
 
-A financial analytics platform combining financial data, valuation, risk intelligence, cash-flow analysis, capital allocation analysis, and automated financial reporting.
+A financial analytics platform combining financial data, valuation, risk intelligence, cash-flow analysis, capital allocation analysis, peer comparison, sector analysis, stock screening, and automated financial reporting.
