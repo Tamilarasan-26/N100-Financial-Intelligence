@@ -2,7 +2,9 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
+
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 
 
 # ============================================================
@@ -758,6 +760,10 @@ def get_company_cash_flow(
 @router.get("/{company_id}/ratios")
 def get_company_ratios(
     company_id: str,
+    year: Optional[int] = Query(
+        default=None,
+        description="Return ratios for a single year.",
+    ),
     from_year: Optional[int] = Query(
         default=None,
         description="Starting year for the annual ratio history.",
@@ -891,9 +897,20 @@ def get_company_ratios(
 
         params = [company_id]
 
-        # ----------------------------------------------------
+        # --------------------------------------------------------
+        # Single-year filter
+        # --------------------------------------------------------
+
+        if year is not None:
+            query += """
+                AND year = ?
+            """
+
+            params.append(year)
+
+        # --------------------------------------------------------
         # From-year filter
-        # ----------------------------------------------------
+        # --------------------------------------------------------
 
         if from_year is not None:
             query += """
@@ -902,9 +919,9 @@ def get_company_ratios(
 
             params.append(from_year)
 
-        # ----------------------------------------------------
+        # --------------------------------------------------------
         # To-year filter
-        # ----------------------------------------------------
+        # --------------------------------------------------------
 
         if to_year is not None:
             query += """
@@ -945,309 +962,61 @@ def get_company_ratios(
     return {
         "company_id": company_id,
         "count": len(records),
+        "year": year,
         "from_year": from_year,
         "to_year": to_year,
         "data": records,
     }
-    
+        
 # ============================================================
-# GET COMPANY TEARSHEET
+# GET COMPANY TEARSHEET PDF
 # ============================================================
 
 @router.get("/{company_id}/tearsheet")
 def get_company_tearsheet(company_id: str):
     """
-    Return a consolidated company tearsheet.
-
-    Includes:
-    - Company profile
-    - Latest annual financial ratios
-    - Latest annual profit and loss
-    - Latest balance sheet
-    - Latest annual cash flow
-    - Latest market valuation data
+    Return the pre-generated company tearsheet PDF.
     """
 
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
-
-    try:
-
-        # ----------------------------------------------------
-        # 1. COMPANY PROFILE
-        # ----------------------------------------------------
-
-        company_row = connection.execute(
-            """
-            SELECT
-                id,
-                company_logo,
-                company_name,
-                chart_link,
-                about_company,
-                website,
-                nse_profile,
-                bse_profile,
-                face_value,
-                book_value,
-                roce_percentage,
-                roe_percentage,
-                broad_sector,
-                sub_sector,
-                index_weight_pct,
-                market_cap_category
-            FROM companies
-            WHERE id = ?
-            LIMIT 1
-            """,
-            (company_id,),
-        ).fetchone()
-
-        if company_row is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Company '{company_id}' not found.",
-            )
-
-        # ----------------------------------------------------
-        # 2. LATEST ANNUAL FINANCIAL RATIOS
-        # ----------------------------------------------------
-
-        ratio_row = connection.execute(
-            """
-            SELECT
-                year,
-                period_type,
-                period_months,
-
-                net_profit_margin_pct,
-                operating_profit_margin_pct,
-
-                return_on_equity_pct,
-                return_on_capital_employed_pct,
-                return_on_assets_pct,
-
-                debt_to_equity,
-                high_leverage_flag,
-
-                interest_coverage,
-                icr_label,
-                low_interest_coverage_flag,
-
-                net_debt_cr,
-                asset_turnover,
-
-                revenue_cagr_3y_pct,
-                revenue_cagr_5y_pct,
-                revenue_cagr_10y_pct,
-
-                pat_cagr_3y_pct,
-                pat_cagr_5y_pct,
-                pat_cagr_10y_pct,
-
-                eps_cagr_3y_pct,
-                eps_cagr_5y_pct,
-                eps_cagr_10y_pct,
-
-                free_cash_flow_cr,
-
-                cfo_quality_score,
-                cfo_quality_label,
-
-                capex_cr,
-                capex_intensity_pct,
-                fcf_conversion_rate_pct,
-
-                earnings_per_share,
-                book_value_per_share,
-
-                dividend_payout_ratio_pct,
-
-                total_debt_cr,
-                cash_from_operations_cr,
-
-                composite_quality_score
-
-            FROM financial_ratios
-
-            WHERE company_id = ?
-              AND period_type = 'ANNUAL'
-              AND year IS NOT NULL
-
-            ORDER BY year DESC
-
-            LIMIT 1
-            """,
-            (company_id,),
-        ).fetchone()
-
-        # ----------------------------------------------------
-        # 3. LATEST ANNUAL PROFIT & LOSS
-        # ----------------------------------------------------
-
-        profit_row = connection.execute(
-            """
-            SELECT
-                year,
-                period_type,
-                period_months,
-                sales,
-                expenses,
-                operating_profit,
-                opm_percentage,
-                other_income,
-                interest,
-                depreciation,
-                profit_before_tax,
-                tax_percentage,
-                net_profit,
-                eps,
-                dividend_payout
-
-            FROM profitandloss
-
-            WHERE company_id = ?
-              AND period_type = 'ANNUAL'
-              AND year IS NOT NULL
-
-            ORDER BY year DESC
-
-            LIMIT 1
-            """,
-            (company_id,),
-        ).fetchone()
-
-        # ----------------------------------------------------
-        # 4. LATEST BALANCE SHEET
-        # ----------------------------------------------------
-
-        balance_row = connection.execute(
-            """
-            SELECT
-                year,
-                equity_capital,
-                reserves,
-                borrowings,
-                other_liabilities,
-                total_liabilities,
-                fixed_assets,
-                cwip,
-                investments,
-                other_asset,
-                total_assets
-
-            FROM balancesheet
-
-            WHERE company_id = ?
-              AND year IS NOT NULL
-
-            ORDER BY year DESC, id DESC
-
-            LIMIT 1
-            """,
-            (company_id,),
-        ).fetchone()
-
-        # ----------------------------------------------------
-        # 5. LATEST ANNUAL CASH FLOW
-        # ----------------------------------------------------
-
-        cashflow_row = connection.execute(
-            """
-            SELECT
-                year,
-                operating_activity,
-                investing_activity,
-                financing_activity,
-                net_cash_flow
-
-            FROM cashflow
-
-            WHERE company_id = ?
-              AND year IS NOT NULL
-
-            ORDER BY year DESC, id ASC
-
-            LIMIT 1
-            """,
-            (company_id,),
-        ).fetchone()
-
-        # ----------------------------------------------------
-        # 6. LATEST MARKET / VALUATION DATA
-        # ----------------------------------------------------
-
-        market_row = connection.execute(
-            """
-            SELECT
-                year,
-                market_cap_crore,
-                enterprise_value_crore,
-                pe_ratio,
-                pb_ratio,
-                ev_ebitda,
-                dividend_yield_pct
-
-            FROM market_cap
-
-            WHERE company_id = ?
-              AND year IS NOT NULL
-
-            ORDER BY year DESC, id DESC
-
-            LIMIT 1
-            """,
-            (company_id,),
-        ).fetchone()
-
-    finally:
-        connection.close()
-
     # --------------------------------------------------------
-    # Convert database rows to dictionaries
+    # Tearsheets directory
     # --------------------------------------------------------
 
-    company = dict(company_row)
-
-    latest_ratios = (
-        dict(ratio_row)
-        if ratio_row is not None
-        else None
-    )
-
-    latest_profit_and_loss = (
-        dict(profit_row)
-        if profit_row is not None
-        else None
-    )
-
-    latest_balance_sheet = (
-        dict(balance_row)
-        if balance_row is not None
-        else None
-    )
-
-    latest_cash_flow = (
-        dict(cashflow_row)
-        if cashflow_row is not None
-        else None
-    )
-
-    latest_market_data = (
-        dict(market_row)
-        if market_row is not None
-        else None
+    tearsheet_dir = (
+        PROJECT_ROOT
+        / "reports"
+        / "tearsheets"
     )
 
     # --------------------------------------------------------
-    # Final response
+    # Find company tearsheet
     # --------------------------------------------------------
 
-    return {
-        "company": company,
-        "latest_ratios": latest_ratios,
-        "latest_profit_and_loss": latest_profit_and_loss,
-        "latest_balance_sheet": latest_balance_sheet,
-        "latest_cash_flow": latest_cash_flow,
-        "latest_market_data": latest_market_data,
-    }
+    pdf_path = None
+
+    for path in tearsheet_dir.glob("*.pdf"):
+
+        if path.stem.upper() == f"{company_id.upper()}_TEARSHEET":
+            pdf_path = path
+            break
+
+    # --------------------------------------------------------
+    # PDF not found
+    # --------------------------------------------------------
+
+    if pdf_path is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tearsheet PDF for company '{company_id}' not found.",
+        )
+
+    # --------------------------------------------------------
+    # Return PDF
+    # --------------------------------------------------------
+
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=pdf_path.name,
+    )
