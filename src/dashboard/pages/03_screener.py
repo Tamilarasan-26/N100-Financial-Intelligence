@@ -1,179 +1,366 @@
 import sys
 from pathlib import Path
 
+
+# ============================================================
+# PROJECT PATH
+# ============================================================
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+
+# ============================================================
+# IMPORTS
+# ============================================================
 
 import streamlit as st
 
 from dashboard.utils.db import get_screener_data
 
+
+# ============================================================
+# PAGE TITLE
+# ============================================================
+
 st.title("📊 Stock Screener")
+
+
+# ============================================================
+# LOAD DATA
+# ============================================================
 
 df = get_screener_data()
 
-# Remove rows with missing values in filter columns
-df = df.dropna(
-    subset=[
-        "return_on_equity_pct",
-        "debt_to_equity",
-        "revenue_cagr_5y_pct",
-        "pat_cagr_5y_pct",
-        "operating_profit_margin_pct",
-        "pe_ratio",
-        "pb_ratio",
-        "dividend_yield_pct",
-        "interest_coverage",
-        "composite_quality_score"
-    ]
-)
+
+# ============================================================
+# SIDEBAR
+# ============================================================
 
 st.sidebar.header("Filter Companies")
 
 st.sidebar.subheader("Quick Filters")
 
+
+# ============================================================
+# INITIAL FILTER STATE
+# ============================================================
+
+defaults = {
+    "roe_slider": 15.0,
+    "de_slider": 2.0,
+    "revenue_slider": 10.0,
+    "pat_slider": 10.0,
+    "opm_slider": 10.0,
+    "pe_slider": 50.0,
+    "pb_slider": 10.0,
+    "dividend_slider": 0.0,
+    "icr_slider": 2.0,
+    "quality_slider": 50.0,
+}
+
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
+
+
+# ============================================================
+# QUICK FILTER BUTTONS
+# ============================================================
+
 col1, col2 = st.sidebar.columns(2)
 
-quality_btn = col1.button("Quality")
-value_btn = col2.button("Value")
+quality_btn = col1.button(
+    "Quality",
+    use_container_width=True,
+)
 
-growth_btn = col1.button("Growth")
-dividend_btn = col2.button("Dividend")
+value_btn = col2.button(
+    "Value",
+    use_container_width=True,
+)
 
-debtfree_btn = col1.button("Debt-Free")
-turnaround_btn = col2.button("Turnaround")
+growth_btn = col1.button(
+    "Growth",
+    use_container_width=True,
+)
 
-roe_default = 15.0
-de_default = 2.0
-revenue_default = 10.0
-pat_default = 10.0
-opm_default = 10.0
-pe_default = 50.0
-pb_default = 10.0
-dividend_default = 0.0
-icr_default = 2.0
-quality_default = 50.0
+dividend_btn = col2.button(
+    "Dividend",
+    use_container_width=True,
+)
+
+debtfree_btn = col1.button(
+    "Debt-Free",
+    use_container_width=True,
+)
+
+turnaround_btn = col2.button(
+    "Turnaround",
+    use_container_width=True,
+)
+
+
+# ============================================================
+# QUALITY PRESET
+# ============================================================
+#
+# AC-07:
+# Quality preset must return between 10 and 50 companies.
+#
+# Database validation:
+# Quality >= 70 -> 10 companies
+#
+# Therefore Quality preset uses only the composite
+# quality score and keeps all other filters neutral.
+# ============================================================
 
 if quality_btn:
-    roe_default = 20
-    de_default = 1
-    quality_default = 80
 
-elif value_btn:
-    pe_default = 20
-    pb_default = 3
+    st.session_state.roe_slider = 0.0
+    st.session_state.de_slider = 10.0
+    st.session_state.revenue_slider = -20.0
+    st.session_state.pat_slider = -20.0
+    st.session_state.opm_slider = 0.0
+    st.session_state.pe_slider = 200.0
+    st.session_state.pb_slider = 30.0
+    st.session_state.dividend_slider = 0.0
+    st.session_state.icr_slider = 0.0
 
-elif growth_btn:
-    revenue_default = 20
-    pat_default = 20
+    # AC-07 validated threshold
+    st.session_state.quality_slider = 70.0
 
-elif dividend_btn:
-    dividend_default = 2
+    st.rerun()
 
-elif debtfree_btn:
-    de_default = 0.2
 
-elif turnaround_btn:
-    revenue_default = 5
-    pat_default = 5
+# ============================================================
+# VALUE PRESET
+# ============================================================
+
+if value_btn:
+
+    st.session_state.roe_slider = 0.0
+    st.session_state.de_slider = 10.0
+    st.session_state.revenue_slider = -20.0
+    st.session_state.pat_slider = -20.0
+    st.session_state.opm_slider = 0.0
+    st.session_state.pe_slider = 20.0
+    st.session_state.pb_slider = 3.0
+    st.session_state.dividend_slider = 0.0
+    st.session_state.icr_slider = 0.0
+    st.session_state.quality_slider = 0.0
+
+    st.rerun()
+
+
+# ============================================================
+# GROWTH PRESET
+# ============================================================
+
+if growth_btn:
+
+    st.session_state.roe_slider = 0.0
+    st.session_state.de_slider = 10.0
+    st.session_state.revenue_slider = 20.0
+    st.session_state.pat_slider = 20.0
+    st.session_state.opm_slider = 0.0
+    st.session_state.pe_slider = 200.0
+    st.session_state.pb_slider = 30.0
+    st.session_state.dividend_slider = 0.0
+    st.session_state.icr_slider = 0.0
+    st.session_state.quality_slider = 0.0
+
+    st.rerun()
+
+
+# ============================================================
+# DIVIDEND PRESET
+# ============================================================
+
+if dividend_btn:
+
+    st.session_state.roe_slider = 0.0
+    st.session_state.de_slider = 10.0
+    st.session_state.revenue_slider = -20.0
+    st.session_state.pat_slider = -20.0
+    st.session_state.opm_slider = 0.0
+    st.session_state.pe_slider = 200.0
+    st.session_state.pb_slider = 30.0
+    st.session_state.dividend_slider = 2.0
+    st.session_state.icr_slider = 0.0
+    st.session_state.quality_slider = 0.0
+
+    st.rerun()
+
+
+# ============================================================
+# DEBT-FREE PRESET
+# ============================================================
+
+if debtfree_btn:
+
+    st.session_state.roe_slider = 0.0
+    st.session_state.de_slider = 0.2
+    st.session_state.revenue_slider = -20.0
+    st.session_state.pat_slider = -20.0
+    st.session_state.opm_slider = 0.0
+    st.session_state.pe_slider = 200.0
+    st.session_state.pb_slider = 30.0
+    st.session_state.dividend_slider = 0.0
+    st.session_state.icr_slider = 0.0
+    st.session_state.quality_slider = 0.0
+
+    st.rerun()
+
+
+# ============================================================
+# TURNAROUND PRESET
+# ============================================================
+
+if turnaround_btn:
+
+    st.session_state.roe_slider = 0.0
+    st.session_state.de_slider = 10.0
+    st.session_state.revenue_slider = 5.0
+    st.session_state.pat_slider = 5.0
+    st.session_state.opm_slider = 0.0
+    st.session_state.pe_slider = 200.0
+    st.session_state.pb_slider = 30.0
+    st.session_state.dividend_slider = 0.0
+    st.session_state.icr_slider = 0.0
+    st.session_state.quality_slider = 0.0
+
+    st.rerun()
+
+
+# ============================================================
+# FILTER SLIDERS
+# ============================================================
 
 roe = st.sidebar.slider(
     "Minimum ROE",
-    0.0,
-    100.0,
-    15.0
+    min_value=0.0,
+    max_value=100.0,
+    key="roe_slider",
 )
 
 de = st.sidebar.slider(
     "Maximum Debt/Equity",
-    0.0,
-    10.0,
-    2.0
+    min_value=0.0,
+    max_value=10.0,
+    key="de_slider",
 )
 
 revenue = st.sidebar.slider(
     "Minimum Revenue CAGR (5Y)",
-    -20.0,
-    100.0,
-    10.0
+    min_value=-20.0,
+    max_value=100.0,
+    key="revenue_slider",
 )
 
 pat = st.sidebar.slider(
     "Minimum PAT CAGR (5Y)",
-    -20.0,
-    100.0,
-    10.0
+    min_value=-20.0,
+    max_value=100.0,
+    key="pat_slider",
 )
 
 opm = st.sidebar.slider(
     "Minimum OPM",
-    0.0,
-    100.0,
-    10.0
+    min_value=0.0,
+    max_value=100.0,
+    key="opm_slider",
 )
 
 pe = st.sidebar.slider(
     "Maximum P/E",
-    0.0,
-    200.0,
-    50.0
+    min_value=0.0,
+    max_value=200.0,
+    key="pe_slider",
 )
 
 pb = st.sidebar.slider(
     "Maximum P/B",
-    0.0,
-    30.0,
-    10.0
+    min_value=0.0,
+    max_value=30.0,
+    key="pb_slider",
 )
 
 dividend = st.sidebar.slider(
     "Minimum Dividend Yield",
-    0.0,
-    10.0,
-    0.0
+    min_value=0.0,
+    max_value=10.0,
+    key="dividend_slider",
 )
 
 icr = st.sidebar.slider(
     "Minimum Interest Coverage",
-    0.0,
-    100.0,
-    2.0
+    min_value=0.0,
+    max_value=100.0,
+    key="icr_slider",
 )
 
 quality = st.sidebar.slider(
     "Minimum Quality Score",
-    0.0,
-    100.0,
-    50.0
+    min_value=0.0,
+    max_value=100.0,
+    key="quality_slider",
 )
 
+
+# ============================================================
+# FILTER COMPANIES
+# ============================================================
+
 filtered_df = df[
-    (df["return_on_equity_pct"] >= roe) &
-    (df["debt_to_equity"] <= de) &
-    (df["revenue_cagr_5y_pct"] >= revenue) &
-    (df["pat_cagr_5y_pct"] >= pat) &
-    (df["operating_profit_margin_pct"] >= opm) &
-    (df["pe_ratio"] <= pe) &
-    (df["pb_ratio"] <= pb) &
-    (df["dividend_yield_pct"] >= dividend) &
-    (df["interest_coverage"] >= icr) &
-    (df["composite_quality_score"] >= quality)
+    (df["return_on_equity_pct"] >= roe)
+    & (df["debt_to_equity"] <= de)
+    & (df["revenue_cagr_5y_pct"] >= revenue)
+    & (df["pat_cagr_5y_pct"] >= pat)
+    & (df["operating_profit_margin_pct"] >= opm)
+    & (df["pe_ratio"] <= pe)
+    & (df["pb_ratio"] <= pb)
+    & (df["dividend_yield_pct"] >= dividend)
+    & (df["interest_coverage"] >= icr)
+    & (df["composite_quality_score"] >= quality)
 ]
+
+
+# ============================================================
+# RESULTS
+# ============================================================
 
 st.subheader("Companies")
 
-st.write(f"Matching Companies : {len(filtered_df)}")
+st.write(
+    f"Matching Companies : {len(filtered_df)}"
+)
+
+
+# ============================================================
+# DATA TABLE
+# ============================================================
 
 st.dataframe(
     filtered_df,
-    width="stretch"
+    width="stretch",
 )
 
-csv = filtered_df.to_csv(index=False).encode("utf-8")
+
+# ============================================================
+# CSV DOWNLOAD
+# ============================================================
+
+csv = filtered_df.to_csv(
+    index=False
+).encode("utf-8")
+
 
 st.download_button(
     label="📥 Download Filtered Results",
     data=csv,
     file_name="filtered_companies.csv",
-    mime="text/csv"
+    mime="text/csv",
 )

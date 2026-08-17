@@ -195,7 +195,7 @@ def main():
 
     output_file = OUTPUT_DIR / "validation_failures.csv"
 
-    pd.DataFrame(
+    failure_df = pd.DataFrame(
         failures,
         columns=[
             "rule",
@@ -203,7 +203,16 @@ def main():
             "severity",
             "message"
         ]
-    ).to_csv(output_file, index=False)
+    )
+
+    ac19_df = pd.DataFrame({
+        "company_id": "",
+        "field": failure_df["table"],
+        "issue": failure_df["message"],
+        "severity": failure_df["severity"]
+    })
+
+    ac19_df.to_csv(output_file, index=False)
 
     critical_count = sum(
         failure["severity"] == "CRITICAL"
