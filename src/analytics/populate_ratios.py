@@ -4,6 +4,8 @@ import sys
 import logging
 
 import pandas as pd
+
+
 # ==========================================================
 # Edge Case Logger
 # ==========================================================
@@ -41,9 +43,11 @@ from src.analytics.ratios import (
     asset_turnover,
 )
 
+
 from src.analytics.cagr import (
     calculate_growth_cagrs,
 )
+
 
 from src.analytics.cashflow_kpis import (
     free_cash_flow,
@@ -58,6 +62,7 @@ DB_PATH = (
     / "db"
     / "nifty100.db"
 )
+
 
 RATIO_OUTPUT_PATH = (
     PROJECT_ROOT
@@ -385,6 +390,12 @@ def create_ratio_records(
     data are unavailable.
 
     CAGR calculations use annual P&L history only.
+
+    IMPORTANT:
+    CAGR is calculated relative to the current annual
+    financial year. Therefore a 5Y CAGR on the 2021
+    record uses 2016 -> 2021, while the 2022 record
+    uses 2017 -> 2022.
     """
 
     records = []
@@ -447,9 +458,10 @@ def create_ratio_records(
         ): row
         for _, row in cashflow.iterrows()
     }
+
     companies_lookup = {
-    row["id"]: row
-    for _, row in companies.iterrows()
+        row["id"]: row
+        for _, row in companies.iterrows()
     }
 
     for (
@@ -461,13 +473,14 @@ def create_ratio_records(
             company_id
         )
 
+        # =====================================================
+        # Build complete annual CAGR history once
+        # =====================================================
+
         growth_records = build_growth_records(
             company_pnl
         )
 
-        growth = calculate_growth_cagrs(
-            growth_records
-        )
         # =====================================================
         # Latest Annual Year
         # =====================================================
@@ -502,6 +515,69 @@ def create_ratio_records(
                     pnl_row["year"]
                 )
 
+            # =====================================================
+            # YEAR-SPECIFIC CAGR
+            # =====================================================
+            #
+            # IMPORTANT:
+            # Do NOT use one CAGR calculated from the latest
+            # company year for every ratio record.
+            #
+            # Example:
+            #   2021 record -> 2016 to 2021
+            #   2022 record -> 2017 to 2022
+            #
+            # CAGR is only calculated for ANNUAL records.
+            # TTM and PARTIAL records receive INSUFFICIENT.
+            # =====================================================
+
+            if (
+                period_type == "ANNUAL"
+                and year is not None
+            ):
+                year_growth_records = [
+                    record
+                    for record in growth_records
+                    if record["year"] <= year
+                ]
+
+                growth = calculate_growth_cagrs(
+                    year_growth_records
+                )
+            else:
+                growth = {
+                    "revenue_cagr_3y": None,
+                    "revenue_cagr_3y_flag": "INSUFFICIENT",
+
+                    "revenue_cagr_5y": None,
+                    "revenue_cagr_5y_flag": "INSUFFICIENT",
+
+                    "revenue_cagr_10y": None,
+                    "revenue_cagr_10y_flag": "INSUFFICIENT",
+
+                    "pat_cagr_3y": None,
+                    "pat_cagr_3y_flag": "INSUFFICIENT",
+
+                    "pat_cagr_5y": None,
+                    "pat_cagr_5y_flag": "INSUFFICIENT",
+
+                    "pat_cagr_10y": None,
+                    "pat_cagr_10y_flag": "INSUFFICIENT",
+
+                    "eps_cagr_3y": None,
+                    "eps_cagr_3y_flag": "INSUFFICIENT",
+
+                    "eps_cagr_5y": None,
+                    "eps_cagr_5y_flag": "INSUFFICIENT",
+
+                    "eps_cagr_10y": None,
+                    "eps_cagr_10y_flag": "INSUFFICIENT",
+                }
+
+            # =====================================================
+            # Annual Balance Sheet / Cash Flow
+            # =====================================================
+
             if (
                 period_type == "ANNUAL"
                 and year is not None
@@ -509,8 +585,8 @@ def create_ratio_records(
                 balance_row = (
                     balance_lookup.get(
                         (
-                          company_id,
-                         year,
+                            company_id,
+                            year,
                         )
                     )
                 )
@@ -531,7 +607,7 @@ def create_ratio_records(
                 if balance_row is None:
                     logging.warning(
                         f"{company_id} | {year} | Missing balance sheet"
-                )   
+                    )
 
                 if cashflow_row is None:
                     logging.warning(
@@ -693,7 +769,7 @@ def create_ratio_records(
                 company_row,
                 "roce_percentage"
             )
-            
+
             # =====================================================
             # ROE Cross Check
             # =====================================================
@@ -717,6 +793,7 @@ def create_ratio_records(
                         f"Source={source_roe:.2f} | "
                         f"Difference={difference:.2f}"
                     )
+
             # =====================================================
             # ROCE Cross Check
             # =====================================================
@@ -880,6 +957,10 @@ def create_ratio_records(
                     / equity_capital
                 )
 
+            # =====================================================
+            # Ratio Record
+            # =====================================================
+
             record = {
                 "company_id": company_id,
                 "year": year,
@@ -910,9 +991,14 @@ def create_ratio_records(
 
                 "asset_turnover": turnover,
 
+                # =================================================
+                # Revenue CAGR
+                # =================================================
+
                 "revenue_cagr_3y_pct": growth[
                     "revenue_cagr_3y"
                 ],
+
                 "revenue_cagr_3y_flag": growth[
                     "revenue_cagr_3y_flag"
                 ],
@@ -920,6 +1006,7 @@ def create_ratio_records(
                 "revenue_cagr_5y_pct": growth[
                     "revenue_cagr_5y"
                 ],
+
                 "revenue_cagr_5y_flag": growth[
                     "revenue_cagr_5y_flag"
                 ],
@@ -927,13 +1014,19 @@ def create_ratio_records(
                 "revenue_cagr_10y_pct": growth[
                     "revenue_cagr_10y"
                 ],
+
                 "revenue_cagr_10y_flag": growth[
                     "revenue_cagr_10y_flag"
                 ],
 
+                # =================================================
+                # PAT CAGR
+                # =================================================
+
                 "pat_cagr_3y_pct": growth[
                     "pat_cagr_3y"
                 ],
+
                 "pat_cagr_3y_flag": growth[
                     "pat_cagr_3y_flag"
                 ],
@@ -941,6 +1034,7 @@ def create_ratio_records(
                 "pat_cagr_5y_pct": growth[
                     "pat_cagr_5y"
                 ],
+
                 "pat_cagr_5y_flag": growth[
                     "pat_cagr_5y_flag"
                 ],
@@ -948,13 +1042,19 @@ def create_ratio_records(
                 "pat_cagr_10y_pct": growth[
                     "pat_cagr_10y"
                 ],
+
                 "pat_cagr_10y_flag": growth[
                     "pat_cagr_10y_flag"
                 ],
 
+                # =================================================
+                # EPS CAGR
+                # =================================================
+
                 "eps_cagr_3y_pct": growth[
                     "eps_cagr_3y"
                 ],
+
                 "eps_cagr_3y_flag": growth[
                     "eps_cagr_3y_flag"
                 ],
@@ -962,6 +1062,7 @@ def create_ratio_records(
                 "eps_cagr_5y_pct": growth[
                     "eps_cagr_5y"
                 ],
+
                 "eps_cagr_5y_flag": growth[
                     "eps_cagr_5y_flag"
                 ],
@@ -969,9 +1070,14 @@ def create_ratio_records(
                 "eps_cagr_10y_pct": growth[
                     "eps_cagr_10y"
                 ],
+
                 "eps_cagr_10y_flag": growth[
                     "eps_cagr_10y_flag"
                 ],
+
+                # =================================================
+                # Cash Flow KPIs
+                # =================================================
 
                 "free_cash_flow_cr": fcf,
 
@@ -1023,9 +1129,18 @@ def save_ratio_records(
     """
     Validate and persist period-aware financial ratios.
 
-    The processed financial_ratios dataset is
-    overwritten only after structural and
-    financial-period checks pass.
+    The processed financial_ratios CSV is written only after
+    structural and financial-period validation succeeds.
+
+    The SQLite financial_ratios table is then synchronized
+    using the natural period key:
+
+        company_id
+        year
+        period_type
+        period_months
+
+    This keeps the CSV and SQLite database consistent.
     """
 
     required_columns = [
@@ -1162,6 +1277,25 @@ def save_ratio_records(
             f"{len(partial_invalid)}"
         )
 
+    ratios = ratios.copy()
+
+    ratios["company_id"] = (
+        ratios["company_id"]
+        .astype(str)
+        .str.strip()
+    )
+
+    ratios["period_type"] = (
+        ratios["period_type"]
+        .astype(str)
+        .str.strip()
+    )
+
+    ratios["period_months"] = (
+        ratios["period_months"]
+        .astype(int)
+    )
+
     RATIO_OUTPUT_PATH.parent.mkdir(
         parents=True,
         exist_ok=True
@@ -1182,8 +1316,6 @@ def save_ratio_records(
         len(ratios)
     )
 
-
-def main():
     if not DB_PATH.exists():
         raise FileNotFoundError(
             f"Database not found: {DB_PATH}"
@@ -1194,6 +1326,189 @@ def main():
     )
 
     try:
+        cursor = connection.cursor()
+
+        db_columns = [
+            row[1]
+            for row in cursor.execute(
+                "PRAGMA table_info(financial_ratios)"
+            ).fetchall()
+        ]
+
+        if not db_columns:
+            raise RuntimeError(
+                "financial_ratios table does not exist"
+            )
+
+        update_columns = [
+            column
+            for column in ratios.columns
+            if (
+                column in db_columns
+                and column != "id"
+            )
+        ]
+
+        if not update_columns:
+            raise RuntimeError(
+                "No common financial_ratios columns "
+                "available for synchronization"
+            )
+
+        for key in period_keys:
+            if key not in db_columns:
+                raise RuntimeError(
+                    "SQLite financial_ratios table is missing "
+                    f"key column: {key}"
+                )
+
+        db_count_before = cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM financial_ratios
+            """
+        ).fetchone()[0]
+
+        print(
+            "SQLite financial_ratios rows before sync:",
+            db_count_before
+        )
+
+        if db_count_before != len(ratios):
+            raise RuntimeError(
+                "SQLite/CSV ratio row count mismatch: "
+                f"SQLite={db_count_before}, "
+                f"CSV={len(ratios)}"
+            )
+
+        set_clause = ", ".join(
+            f'"{column}" = ?'
+            for column in update_columns
+        )
+
+        update_sql = f"""
+            UPDATE financial_ratios
+            SET {set_clause}
+            WHERE company_id = ?
+              AND (
+                    year = ?
+                    OR (
+                        year IS NULL
+                        AND ? IS NULL
+                    )
+                  )
+              AND period_type = ?
+              AND period_months = ?
+        """
+
+        updated_rows = 0
+        missing_rows = []
+
+        for _, row in ratios.iterrows():
+
+            values = [
+                None
+                if pd.isna(row[column])
+                else row[column]
+                for column in update_columns
+            ]
+
+            year_value = (
+                None
+                if pd.isna(row["year"])
+                else float(row["year"])
+            )
+
+            key_values = [
+                row["company_id"],
+                year_value,
+                year_value,
+                row["period_type"],
+                int(row["period_months"]),
+            ]
+
+            cursor.execute(
+                update_sql,
+                values + key_values
+            )
+
+            if cursor.rowcount == 0:
+                missing_rows.append(
+                    (
+                        row["company_id"],
+                        year_value,
+                        row["period_type"],
+                        int(row["period_months"]),
+                    )
+                )
+            else:
+                updated_rows += cursor.rowcount
+
+        if missing_rows:
+            connection.rollback()
+
+            preview = missing_rows[:10]
+
+            raise RuntimeError(
+                "Ratio synchronization failed. "
+                "Database rows were not found for "
+                f"{len(missing_rows)} records. "
+                f"Examples: {preview}"
+            )
+
+        connection.commit()
+
+        db_count_after = cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM financial_ratios
+            """
+        ).fetchone()[0]
+
+        if db_count_after != len(ratios):
+            connection.rollback()
+
+            raise RuntimeError(
+                "SQLite ratio row count changed unexpectedly: "
+                f"before={db_count_before}, "
+                f"after={db_count_after}, "
+                f"CSV={len(ratios)}"
+            )
+
+        print(
+            "SQLite financial_ratios rows updated:",
+            updated_rows
+        )
+
+        print(
+            "SQLite financial_ratios rows after sync:",
+            db_count_after
+        )
+
+        print(
+            "SQLite ratio synchronization: PASS"
+        )
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+
+def main():
+
+    if not DB_PATH.exists():
+        raise FileNotFoundError(
+            f"Database not found: {DB_PATH}"
+        )
+
+    connection = sqlite3.connect(
+        DB_PATH
+    )
+
+    try:
+
         companies = load_table(
             connection,
             "companies"
